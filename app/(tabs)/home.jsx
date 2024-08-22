@@ -13,6 +13,7 @@ const Home = () => {
       <CustomButton
         title="Create Workout"
         handlePress={() => router.push("/createWorkout")}
+        containerStyles="mx-2"
       />
     </SafeAreaView>
   );
