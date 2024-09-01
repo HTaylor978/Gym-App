@@ -2,60 +2,36 @@
 from contextlib import closing
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-# ^ handles python running in seperate environment to app
 import sqlite3
+import json
+
+
 
 app = Flask(__name__)
 CORS(app)
 
 
-def add_brand(name):
-  # Function to allow the user to add a brand to the Brands TABLE
+def create_tables():
+  # Function to create all tables used in the app
   with closing(sqlite3.connect("database.db")) as connection:
     with closing(connection.cursor()) as cursor:
-      cursor.execute("INSERT INTO Brands VALUES (?)", (name,))
-      connection.commit()
+      # Muscles table
+      cursor.execute("CREATE TABLE IF NOT EXISTS Muscles (\
+                     id INTEGER PRIMARY KEY AUTOINCREMENT,\
+                     name TEXT NOT NULL UNIQUE,\
+                     image_path TEXT NOT NULL)")
+      # Exercises table
+      # Primary muscle is the id of the muscles from Muscles table
+      # Secondary muscles are a list of those id's
+      cursor.execute("CREATE TABLE IF NOT EXISTS Exercises (\
+                     id INTEGER PRIMARY KEY AUTOINCREMENT,\
+                     name TEXT NOT NULL UNIQUE,\
+                     primary_muscle INTEGER,\
+                     secondary_muscles TEXT,\
+                     single_arm BOOLEAN NOT NULL CHECK (single_arm IN (0, 1)),\
+                     FOREIGN KEY (primary_muscle) REFERENCES Muscles(id))")
 
-@app.route("/add-brand", methods=["POST"])
-def addBrand():
-  brandName = request.json.get("brandName")
-  result = add_brand(brandName)
-  return jsonify(result)
-
-
-def remove_brand(name):
-  # Function to allow the user to remove a brand from the Brands TABLE
-  with closing(sqlite3.connect("database.db")) as connection:
-    with closing(connection.cursor()) as cursor:
-      cursor.execute("DELETE FROM Brands WHERE Name=(?)", (name,))
-      connection.commit()
-
-@app.route("/remove-brand", methods=["POST"])
-def removeBrand():
-  brandName = request.json.get("brandName")
-  result = remove_brand(brandName)
-  return jsonify(result)
-
-
-def add_exercise(name, primaryMuscle, secondaryMuscle):
-  # Function to allow the user to add an exercise to the Exercises TABLE
-  with closing(sqlite3.connect("database.db")) as connection:
-    with closing(connection.cursor()) as cursor:
-      # Calculate new id
-      id = cursor.execute("SELECT COUNT(*) FROM Exercises").fetchall() + 1
-      if secondaryMuscle:
-        cursor.execute("INSERT INTO Exercises VALUES (?, ?, ?, ?)", (id, name, primaryMuscle, secondaryMuscle))
-      else:
-        cursor.execute("INSERT INTO Exercises (id, Name, PrimaryMuscle) VALUES (?, ?, ?)", (id, name, primaryMuscle))
-      connection.commit()
-
-@app.route("/add-exercise", methods=["POST"])
-def addExercise():
-  name = request.json.get("name")
-  result = add_exercise(name)
-  return jsonify(result)
-
-
+@app.route("/get-muscles", methods=["GET"])
 def get_muscles():
   # Function to access and return the entirety of the Muscles database
   with closing(sqlite3.connect("database.db")) as connection:
@@ -65,17 +41,42 @@ def get_muscles():
       data = []
       for row in rows:
         item = {
-          'title': row[0],
-          'image': row[1]
+          'id': row[0],
+          'name': row[1],
+          'image_path': row[2]
         }
         data.append(item)
+  return jsonify(data);
 
-  return data;
 
-@app.route("/get-muscles", methods=["GET"])
-def getMuscles():
-  muscles = get_muscles()
-  return jsonify(muscles)
+@app.route("/add-exercise", methods=["POST"])
+def add_exercise():
+  data = request.get_json()
+
+  exercise_name = data.get("exerciseName")
+  primary_muscle = data.get("primaryMuscle")
+  secondary_muscles = data.get("secondaryMuscles", [])
+  single_arm = int(data.get("isSwitchOn", False))
+
+  secondary_muscles_str = json.dumps(secondary_muscles) if secondary_muscles else ""
+
+  if not exercise_name or not primary_muscle:
+    return jsonify({"error": "Exercise name and primary muscle are required"}), 400
+  try:
+    with closing(sqlite3.connect("database.db")) as connection:
+      with closing(connection.cursor()) as cursor:
+        if secondary_muscles:
+          cursor.execute("INSERT INTO Exercises (name, primary_muscle, secondary_muscles, single_arm) VALUES (?, ?, ?, ?)",\
+                         (exercise_name, primary_muscle, secondary_muscles, single_arm))
+        else:
+          cursor.execute("INSERT INTO Exercises (name, primary_muscle, single_arm) VALUES (?, ?, ?)",\
+                         (exercise_name, primary_muscle, single_arm))
+        connection.commit()
+    return jsonify({"status": "success", "message": "Exercise added successfully"})
+  except Exception as e:
+    # Return an error message as JSON
+    return jsonify({"status": "error", "message": str(e)}), 400
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5000)
+  create_tables()
+  app.run(debug=True, host="0.0.0.0", port=5000)

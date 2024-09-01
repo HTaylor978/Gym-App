@@ -9,6 +9,8 @@ import {
 import FormField from "../../components/FormField";
 import ToggleableSwitch from "../../components/ToggleableSwitch";
 import { useEffect, useState } from "react";
+import { router, useGlobalSearchParams } from "expo-router";
+import CustomButton from "../../components/CustomButton";
 
 const CreateExercise = () => {
   const [data, setData] = useState([]);
@@ -17,6 +19,9 @@ const CreateExercise = () => {
   const [primaryMuscle, setPrimaryMuscle] = useState("");
   const [secondaryMuscles, setSecondaryMuscles] = useState([]);
   const [isSwitchOn, setIsSwitchOn] = useState(false);
+  const [exerciseName, setExerciseName] = useState("");
+
+  const { exerciseName: routeExerciseName } = useGlobalSearchParams();
 
   useEffect(() => {
     // Fetch data from Flask API
@@ -32,14 +37,37 @@ const CreateExercise = () => {
       });
   }, []);
 
-  if (isLoading) {
-    return (
-      <View className="flex-1 justify-center items-center bg-primary">
-        <ActivityIndicator size="large" color="bg-secondary" />
-        <Text>Loading...</Text>
-      </View>
-    );
-  }
+  const handleToggleSwitch = () => {
+    setIsSwitchOn(!isSwitchOn);
+  };
+
+  const handleCreateExercise = () => {
+    const exerciseData = {
+      exerciseName: exerciseName || routeExerciseName,
+      primaryMuscle,
+      secondaryMuscles,
+      isSwitchOn,
+    };
+
+    // Send data to backend
+    fetch("http://192.168.0.163:5000/add-exercise", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(exerciseData),
+    })
+      .then((responce) => {
+        responce.json()
+        return responce.json();  // Attempt to parse as JSON
+        })
+      .then((data) => {
+        router.back();
+      })
+      .catch((error) => {
+        console.error("Error creating exercise: ", error);
+      });
+  };
 
   // Calculate width of cells in muscle grid
   const numCols = 3;
@@ -47,29 +75,36 @@ const CreateExercise = () => {
 
   const handleMuscleSelect = (muscle) => {
     if (primarySelected) {
-      setPrimaryMuscle(muscle.title);
+      setPrimaryMuscle(muscle.id);
       setSecondaryMuscles([]);
       setPrimarySelected(false);
     } else {
-      if (secondaryMuscles.includes(muscle.title)) {
-        setSecondaryMuscles(secondaryMuscles.filter((m) => m !== muscle.title));
+      if (secondaryMuscles.includes(muscle.id)) {
+        setSecondaryMuscles(secondaryMuscles.filter((m) => m !== muscle.id));
       } else {
-        setSecondaryMuscles([...secondaryMuscles, muscle.title]);
+        setSecondaryMuscles([...secondaryMuscles, muscle.id]);
       }
     }
   };
 
-  const handleToggleSwitch = () => {
-    setIsSwitchOn(!isSwitchOn);
-  };
+  if (isLoading) {
+    return (
+      <View className="flex-1 justify-center items-center bg-primary">
+        <ActivityIndicator size="large" color="bg-secondary" />
+        <Text className="text-white text-base font-pmedium">Loading...</Text>
+      </View>
+    );
+  }
 
   return (
     <View className="bg-primary h-full">
       <FormField
         title="Exercise Name"
         placeholder="Exercise Name"
+        value={exerciseName}
         otherStyles="mt-12 p-2"
         titleStyles="text-xs"
+        handleChangeText={(text) => setExerciseName(text)}
       />
       <View className="mx-2 mt-3">
         <Text className="text-gray-100 text-base font-pmedium text-xs mb-2 px-1">
@@ -103,8 +138,8 @@ const CreateExercise = () => {
           data={data}
           renderItem={({ item }) => {
             const isPrimarySelected =
-              !primarySelected && item.title === primaryMuscle;
-            const isSecondarySelected = secondaryMuscles.includes(item.title);
+              !primarySelected && item.id === primaryMuscle;
+            const isSecondarySelected = secondaryMuscles.includes(item.id);
             return (
               <View
                 style={{ width: cellWidth }}
@@ -121,13 +156,13 @@ const CreateExercise = () => {
                   disabled={isPrimarySelected && !primarySelected}
                   className="items-center justify-center"
                 >
-                  <Text className="text-white">{item.image}</Text>
-                  <Text className="text-white">{item.title}</Text>
+                  <Text className="text-white">{item.name}</Text>
+                  <Text className="text-white">{item.image_path}</Text>
                 </TouchableOpacity>
               </View>
             );
           }}
-          keyExtractor={(item) => item.image.toString()}
+          keyExtractor={(item) => item.image_path.toString()}
           numColumns={numCols}
           className="mt-1"
         />
@@ -136,11 +171,10 @@ const CreateExercise = () => {
         <Text className="font-psemibold text-base text-gray-100 flex-1">
           Single Arm / Leg
         </Text>
-        <ToggleableSwitch 
-          isOn={isSwitchOn}
-          label="Single Arm/leg"
-          onToggle={handleToggleSwitch}
-        />
+        <ToggleableSwitch isOn={isSwitchOn} onToggle={handleToggleSwitch} />
+      </View>
+      <View className="mt-10 p-2">
+        <CustomButton title="Create Exercise" handlePress={handleCreateExercise} />
       </View>
     </View>
   );

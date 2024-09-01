@@ -1,11 +1,10 @@
-import { useState, useRef } from "react";
-import { View, Text, TouchableOpacity, Animated } from "react-native";
+import { useRef, useEffect } from "react";
+import { Text, TouchableOpacity, Animated } from "react-native";
 
-const ToggleableSwitch = () => {
-  const [isOn, setIsOn] = useState(false);
+const ToggleableSwitch = ({ isOn, onToggle }) => {
   const translateX = useRef(new Animated.Value(0)).current;
 
-  const toggleSwitch = () => {
+  useEffect(() => {
     const targetValue = isOn ? 0 : 30;
 
     // Animate the movement of the switch
@@ -14,13 +13,11 @@ const ToggleableSwitch = () => {
       duration: 200,
       useNativeDriver: true,
     }).start();
-
-    setIsOn(!isOn);
-  };
+  }, [isOn, translateX]);
 
   return (
     <TouchableOpacity
-      onPress={toggleSwitch}
+      onPress={onToggle}
       className={`flex-row items-center w-[70px] h-[40px] rounded-3xl border-2 overflow-hidden ${
         isOn ? "border-secondary" : "border-black-200"
       }`}
